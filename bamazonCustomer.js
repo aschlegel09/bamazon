@@ -4,13 +4,10 @@ var inquirer = require("inquirer");
 var connection = mysql.createConnection({
   host: "localhost",
 
-  // Your port; if not 3306
   port: 3306,
 
-  // Your username
   user: "root",
 
-  // Your password
   password: "password",
   database: "bamazon"
 });
@@ -20,10 +17,11 @@ connection.connect(function(err) {
   start();
 });
 
+// display all of the items available for sale
 function start() {
-  console.log("Items Available for Sale:\n");   
+  console.log("Items Available for Sale:\n");
 
-  connection.query("SELECT item_id,product_name,price FROM products", function(err, res) {
+  connection.query("SELECT * FROM products", function(err, res) {
     if (err) throw err;
 
     for (var x = 0; x < res.length; x++) {
@@ -37,87 +35,95 @@ function start() {
           "\n---------------"
       );
     }
-
     placeOrder();
   });
 }
 
+// fulfill the customer's order
 function placeOrder() {
-    
-    inquirer
-      .prompt([
-        {
-          name: "item",
-          type: "input",
-          message: "What is the ID of the item you would like to buy?"
-        },
-        {
-          name: "quantity",
-          type: "input",
-          message: "How many units would you like to purchase?",
-          validate: function(value) {
-            if (isNaN(value) === false) {
-              return true;
-            }
-            return false;
-          }
-        }
-      ])
-      .then(function(answer) {
-        connection.query(
-            "SELECT * FROM products",
-            {
-              item_id: answer.item,
-              stock_quantity: answer.quantity
-            },
-            function(err, results) {
-              if (err) throw err;
-              console.log("Your purchase order was created successfully!");
-    
-        var chosenItem;
-        for (var i = 0; i < results.length; i++) {
-        // console.log(results.length); //3 x 3
-        // console.log(answer);
-          if (results[i].item_id === answer.item) {
-            chosenItem = results[i];
-            console.log("You chose: " + chosenItem.product_name);
-            // console.log(chosenItem);
-            updateProducts();
-          } else {
-              console.log("Try Again");
-            //   start();
-          }
-        };
-        },
-      )
-    });
-}
+  console.log("Create your Purchase Order");
 
-function updateProducts() {
-        
-          connection.query("UPDATE products SET ? WHERE ?", function(error, results){ [
-              {
-                stock_quantity: (stock_quantity - answer.quantity)
-              },
-              {
-                item_id: answer.item
+  connection.query(
+    "SELECT item_id,product_name,price,stock_quantity FROM products",
+    function(err, results) {
+      if (err) throw err;
+      // ID of the product and how many units
+      inquirer
+        .prompt([
+          {
+            name: "product",
+            type: "rawlist",
+            choices: function() {
+              var choiceArray = [];
+              for (var i = 0; i < results.length; i++) {
+                choiceArray.push(results[i].product_name);
               }
-            ],
-            function(error) {
-              if (error) throw err;
-
-              console.log("Bid placed successfully!");
+              return choiceArray;
+            },
+            message: "Which product would you like to buy?"
+          },
+          {
+            name: "stock",
+            type: "input",
+            message: "How many units would you like to purchase?",
+            validate: function(value) {
+              if (isNaN(value) === false) {
+                return true;
+              }
+              return false;
+            }
           }
-          
-          if (answer.quantity < results[i].stock_quantity) {
+        ])
+        .then(function(answer) {
+          // get the information of the chosen item
+          var chosenItem;
+          for (var i = 0; i < results.length; i++) {
+            if (results[i].product_name === answer.product) {
+              console.log((chosenItem = results[i]));
+            }
+          }
+          if (answer.stock < chosenItem.stock_quantity) {
+            console.log("Your order was successful!");
 
-          console.log("Good job!");
-        } 
-        
-        else {
-          console.log("Your bid was too low. Try again...");
-          start();
-        }
-    })
+            connection.query(
+              "UPDATE products SET ? WHERE ?",
+              [
+                {
+                  stock_quantity:
+                    parseInt(chosenItem.stock_quantity) - parseInt(answer.stock)
+                },
+                {
+                  product_name: answer.product
+                }
+              ],
+              function(error) {
+                if (error) throw err;
+
+                console.log("\nBid placed successfully!\n");
+                console.log("Your order costs a total of $" + chosenItem.price + " dollars.");
+                console.log("------------------");
+                // start();
+              }
+            );
+          } else {
+            console.log(
+              "\nThe quantity requested exceeds our current inventory count. Try again..."
+            );
+            console.log("------------------\n");
+            // start();
+          }
+        });
+    }
+  );
 }
- 
+
+// update the store with what the customer purchased
+// function updateProducts() {
+
+//   var chosenItem = results[i];
+//   // get the information of the chosen item
+//     if (chosenItem.product_name === answer.product) {
+//       console.log((chosenItem = results[i]));
+//     }
+
+//   };
